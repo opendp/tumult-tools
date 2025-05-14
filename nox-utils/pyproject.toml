@@ -1,0 +1,133 @@
+[project]
+name = "tmlt.nox_utils"
+version = "0.0.0"
+description = ""
+authors = []
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "nox>=2022.8.7",
+]
+
+[tool.poetry]
+requires-poetry = ">=2.0"
+packages = [{include = "tmlt", from="src"}]
+
+[tool.poetry.group.black.dependencies]
+black = "^23.3"
+
+[tool.poetry.group.isort.dependencies]
+isort = { version = "^5.11", extras = ["pyproject"] }
+
+[tool.poetry.group.mypy.dependencies]
+mypy = "^1.2"
+
+[tool.poetry.group.pydocstyle.dependencies]
+pydocstyle = { version = "^6.3", extras = ["toml"] }
+
+[tool.poetry.group.pylint.dependencies]
+pylint = "^3.2.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+force-exclude = "noxfile.py"
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+line_length = 88
+
+[tool.mypy]
+mypy_path = "$MYPY_CONFIG_FILE_DIR/src"
+explicit_package_bases = true
+follow_imports = "silent"
+ignore_missing_imports = true
+namespace_packages = true
+disallow_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# TODO: Re-enable this and fix the resulting warnings
+# warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "test.*"
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[tool.pylint.master]
+# See https://github.com/PyCQA/pylint/issues/1975#issuecomment-387924981
+extension-pkg-whitelist = ['numpy']
+load-plugins = ['pylint.extensions.docparams']
+# Only check param docs in docstrings that contain an Args: section.
+# Set to "no" to show docstrings missing argument documentation.
+accept-no-param-doc = true
+
+[tool.pylint.'MESSAGES CONTROL']
+enable = [
+  # Note: there is a false positive on 'useless-suppression' when you
+  # use 'disable=line-too-long' at the end of a docstring.
+  # See: https://github.com/pylint-dev/pylint/issues/8301
+  'useless-suppression'
+]
+# By default, informational rules like useless-suppression don't cause PyLint to
+# produce an error.
+fail-on = ['useless-suppression']
+disable = [
+  'arguments-differ',
+  'consider-using-f-string',
+  'duplicate-code',
+  'fixme',
+  'invalid-name',
+  'logging-format-interpolation',
+  'logging-fstring-interpolation',
+  'missing-raises-doc',
+  'missing-return-doc',
+  'no-else-return',
+  'super-init-not-called',
+  'too-few-public-methods',
+  'too-many-ancestors',
+  'too-many-arguments',
+  'too-many-branches',
+  'too-many-instance-attributes',
+  'too-many-lines',
+  'too-many-locals',
+  'too-many-positional-arguments',
+  'too-many-public-methods',
+  'too-many-return-statements',
+  'too-many-statements',
+  'unbalanced-tuple-unpacking',
+  'unnecessary-lambda-assignment',
+  'unsubscriptable-object',
+  'use-dict-literal',
+  # There are a lot of false positives for unsupported-binary-operation
+  # on Python 3.8 and 3.9;
+  # see: https://github.com/pylint-dev/pylint/issues/7381
+  'unsupported-binary-operation',
+  # black and isort group tmlt.core separately from tmlt.analytics,
+  # but pylint thinks they should both be grouped as 'tmlt'.
+  'ungrouped-imports',
+  'wrong-import-order',
+
+  # There are lots of nested methods in nox_utils where we don't care about docstrings
+  'missing-function-docstring'
+]
+
+[tool.pylint.FORMAT]
+max-line-length = 88
+
+[tool.pydocstyle]
+convention = "google"
+add-ignore = [
+  # `D200: One-line docstring should fit on one line with quotes`
+  # conflicts with pylint's `max-line-length`.
+  "D200",
+
+  # 'Missing docstring in public method' -- again, many places where it doesn't matter
+  "D102",
+]
