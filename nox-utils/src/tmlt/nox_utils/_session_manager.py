@@ -251,7 +251,7 @@ class SessionManager:
         @install_group("pylint")
         def pylint(sess: Session) -> None:
             """Run pylint."""
-            sess.run("pylint", "--score=no", *self._code_dirs)
+            sess.run("pylint", "--score=no", "--recursive=y", *self._code_dirs)
 
     def pydocstyle(self) -> None:
         @session(name="pydocstyle", tags=["lint"], python=self._default_python_version)
