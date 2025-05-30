@@ -91,15 +91,28 @@ class SessionManager:
         self._audit_suppressions = audit_suppressions or []
 
     @property
-    def _code_dirs(self) -> list[Path]:
+    def _test_dirs(self) -> list[Path]:
         return [
             p
             for p in [
-                self._directory / "src",
                 self._directory / "test",
             ]
             if p.exists()
         ]
+
+    @property
+    def _source_dirs(self) -> list[Path]:
+        return [
+            p
+            for p in [
+                self._directory / "src",
+            ]
+            if p.exists()
+        ]
+
+    @property
+    def _code_dirs(self) -> list[Path]:
+        return self._source_dirs + self._test_dirs
 
     def _build(self, sess: Session) -> None:
         """Build sdists and wheels for the package.
@@ -286,8 +299,9 @@ class SessionManager:
         *,
         min_coverage: Optional[int] = None,
         extra_args: Optional[list[str]] = None,
+        test_paths: [Optional[list[Path]]] = None,
     ) -> None:
-        test_paths = self._code_dirs
+        test_paths = self._code_dirs if test_paths is None else test_paths
         extra_args = extra_args or []
         if sess.posargs:
             test_paths = []
@@ -348,7 +362,12 @@ class SessionManager:
         @install_group("test")
         def test_doctest(sess: Session) -> None:
             """Run tests on code examples in docstrings."""
-            self._test(sess, min_coverage=0, extra_args=["--doctest-modules"])
+            self._test(
+                sess,
+                min_coverage=0,
+                extra_args=["--doctest-modules"],
+                test_paths=self._source_dirs,
+            )
 
     def _run_sphinx(self, sess: Session, builder: str) -> None:
         sphinx_options = ["-n", "-W", "--keep-going"]
