@@ -299,7 +299,7 @@ class SessionManager:
         *,
         min_coverage: Optional[int] = None,
         extra_args: Optional[list[str]] = None,
-        test_paths: [Optional[list[Path]]] = None,
+        test_paths: Optional[list[Path]] = None,
     ) -> None:
         test_paths = self._code_dirs if test_paths is None else test_paths
         extra_args = extra_args or []
@@ -421,3 +421,38 @@ class SessionManager:
         def audit(sess: Session) -> None:
             """Check for vulnerable dependencies."""
             sess.run("pip-audit", "-v", "--progress-spinner", "off", *ignore_options)
+
+    def benchmark(self, name: str, timeout: int) -> None:
+        """Generate a Nox session running the given benchmark.
+
+        Benchmark scripts are expected to be structured as
+        ``<project_directory>/benchmark/benchmark_<name>.py``. Note that this
+        method only takes in the ``name`` part, not including the ``benchmark_``
+        prefix or file extension.
+
+        Args:
+            name: The name of the benchmark.
+            timeout: The time before the benchmark will be considered failed and
+                killed, in minutes.
+        """
+
+        @session(name=f"benchmark-{name.replace('_', '-')}", tags=["benchmark"])
+        @self._install_package
+        def benchmark(sess: Session) -> None:
+            (self._directory / "benchmark_output").mkdir(exist_ok=True)
+            sess.log("Exit code 124 indicates a timeout, others are script errors")
+            # If we want to run benchmarks on non-Linux platforms this will probably
+            # have to be reworked, but it's fine for now.
+            benchmark_script = self._directory / "benchmark" / f"benchmark_{name}.py"
+            sess.run(
+                "timeout",
+                f"{timeout}m",
+                "bash",
+                "-c",
+                f'time python "{benchmark_script}"',
+                external=True,
+            )
+
+        # You can't use f-strings as ordinary docstrings, but by assigning
+        # directly to __doc__ we can.
+        benchmark.__doc__ = f"Run {name} benchmark."
