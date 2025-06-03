@@ -299,7 +299,7 @@ class SessionManager:
         *,
         min_coverage: Optional[int] = None,
         extra_args: Optional[list[str]] = None,
-        test_paths: [Optional[list[Path]]] = None,
+        test_paths: Optional[list[Path]] = None,
     ) -> None:
         test_paths = self._code_dirs if test_paths is None else test_paths
         extra_args = extra_args or []
@@ -421,3 +421,37 @@ class SessionManager:
         def audit(sess: Session) -> None:
             """Check for vulnerable dependencies."""
             sess.run("pip-audit", "-v", "--progress-spinner", "off", *ignore_options)
+
+    def benchmark(self, script: Path, timeout: int) -> None:
+        """Generate a Nox session running the given benchmark.
+
+        The stem of the script file name will be used as the benchmark name, so
+        passing ``benchmarks/foo.py`` would produce a session named
+        ``benchmark-foo``.
+
+        Args:
+            script: The path to the benchmark script.
+            timeout: The time before the benchmark will be considered failed and
+                killed, in seconds.
+        """
+        name = script.stem.replace("_", "-")
+
+        @session(name=f"benchmark-{name}", tags=["benchmark"])
+        @self._install_package
+        def benchmark(sess: Session) -> None:
+            (self._directory / "benchmark_output").mkdir(exist_ok=True)
+            sess.log("Exit code 124 indicates a timeout, others are script errors")
+            # If we want to run benchmarks on non-Linux platforms this will probably
+            # have to be reworked, but it's fine for now.
+            sess.run(
+                "timeout",
+                f"{timeout}s",
+                "bash",
+                "-c",
+                f'time python "{script}"',
+                external=True,
+            )
+
+        # You can't use f-strings as ordinary docstrings, but by assigning
+        # directly to __doc__ we can.
+        benchmark.__doc__ = f"Run {name} benchmark."
