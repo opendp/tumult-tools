@@ -1,36 +1,50 @@
 [project]
 name = "tmlt.nox_utils"
-version = "0.0.0"
 description = ""
 authors = []
 readme = "README.md"
-requires-python = ">=3.9"
+
+dynamic = ["version"]
+
+requires-python = ">=3.9,<4"
 dependencies = [
-    "nox>=2022.8.7",
+    "nox >=2022.8.7",
+    "uv-dynamic-versioning >=0.8.2,<0.9",
 ]
 
-[tool.poetry]
-requires-poetry = ">=2.0"
-packages = [{include = "tmlt", from="src"}]
+[tool.uv]
+required-version = ">=0.7.0"
+default-groups = "all"
 
-[tool.poetry.group.black.dependencies]
-black = "^23.3"
+[dependency-groups]
+black = ["black >=23.3"]
+isort = ["isort[pyproject] >=5.11,<6"]
+mypy = ["mypy >=1.14.0"]
+pylint = ["pylint >=3.2.5"]
+pydocstyle = ["pydocstyle[toml] >=6.3"]
 
-[tool.poetry.group.isort.dependencies]
-isort = { version = "^5.11", extras = ["pyproject"] }
-
-[tool.poetry.group.mypy.dependencies]
-mypy = "^1.2"
-
-[tool.poetry.group.pydocstyle.dependencies]
-pydocstyle = { version = "^6.3", extras = ["toml"] }
-
-[tool.poetry.group.pylint.dependencies]
-pylint = "^3.2.5"
+################################################################################
+# Build configuration
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "semver"
+# The default configuration expect vX.Y.Z, but we haven't been using the 'v' prefix.
+pattern = "^(?P<base>\\d+\\.\\d+\\.\\d+)(-(?P<stage>[a-zA-Z]+)\\.(?P<revision>\\d+))?"
+commit-length = 8
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tmlt"]
+
+################################################################################
+# Linter configuration
 
 [tool.black]
 force-exclude = "noxfile.py"

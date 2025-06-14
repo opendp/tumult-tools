@@ -4,7 +4,6 @@ This module defines SessionManager, which takes in a collection of configuration
 options and exposes methods that can be called to generate nox sessions.
 """
 
-import subprocess
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
@@ -12,8 +11,13 @@ from typing import Any, Callable, Optional, Union
 import nox
 from nox import Session, session
 
-from ._dependencies import install_group, show_installed
-from ._environment import in_ci, num_cpus
+from ._dependencies import install_group, show_installed, with_uv_env
+from ._environment import in_ci, num_cpus, package_version
+
+# Use uv for managing virtualenvs. This significantly reduces the overhead
+# associated with using nox sessions in their own virtualenvs versus running
+# with --no-venv.
+nox.options.default_venv_backend = "uv"
 
 
 class SessionManager:
@@ -72,11 +76,7 @@ class SessionManager:
             audit_suppressions: A list of vulnerability IDs to ignore.
         """
         self._package = package
-        self._package_version = (
-            subprocess.run(["poetry", "version", "-s"], capture_output=True, check=True)
-            .stdout.decode("utf-8")
-            .strip()
-        )
+        self._package_version = package_version(directory)
         self._directory = directory
         self._default_python_version = default_python_version
         if custom_build is not None and not callable(custom_build):
@@ -118,41 +118,42 @@ class SessionManager:
         """Build sdists and wheels for the package.
 
         If the build process for a package requires custom logic, pass the
-        "build" option to SessionBuilder, with the value being function taking
-        one argument (a nox Session) that builds the package. If this option is
-        not passed, the package is just built with `poetry build`.
+        "build" option to SessionBuilder, with the value being function that
+        builds the package taking one argument (a nox Session) . If this option
+        is not passed, the package is just built with ``uv build``.
         """
         if self._custom_build is not None:
             sess.log("Using custom build function")
             self._custom_build(sess)
         else:
-            sess.run("poetry", "build", external=True)
+            sess.run("uv", "build", external=True)
 
     def _current_wheel_available(self, sess: Session) -> bool:
-        temp_dir = sess.create_tmp()
         package = f"{self._package}=={self._package_version}"
         out = sess.run(
+            "uv",
             "pip",
-            "download",
+            "install",
+            "--dry-run",
             package,
+            "--no-deps",
+            "--no-index",
             "--find-links",
             f"{self._directory}/dist/",
             "--only-binary",
             self._package,
-            "-d",
-            temp_dir,
-            "--no-deps",
             silent=True,
             success_codes=[0, 1],
             external=True,
         )
         assert out is not None, "sess.run should not return None when silent=True"
-        return "No matching distribution" not in out
+        return "No solution found when resolving dependencies" not in out
 
     def _install_package(self, f: Callable[[Session], Any]) -> Callable[[Session], Any]:
-        """Install the main package and its dependencies from Poetry lock."""
+        """Install the main package and its dependencies from uv lock."""
 
         @wraps(f)
+        @with_uv_env
         def inner(sess: Session) -> Any:
             if not sess.virtualenv.is_sandboxed:
                 sess.log(
@@ -161,10 +162,12 @@ class SessionManager:
                 return f(sess)
 
             # In the CI we want to use the wheel from the pipeline, but locally
-            # it's easier to let Poetry handle figuring out what to install and
+            # it's easier to let uv handle figuring out what to install and
             # how to build it if needed.
             if not in_ci():
-                sess.run_install("poetry", "install", "--only", "main", external=True)
+                sess.run_install(
+                    "uv", "sync", "--no-default-groups", "--inexact", external=True
+                )
                 return f(sess)
 
             package = f"{self._package}=={self._package_version}"
@@ -175,15 +178,24 @@ class SessionManager:
                     "wheel must exist when running in CI"
                 )
 
+            sess.run_install(
+                "uv",
+                "sync",
+                "--no-install-project",
+                "--no-default-groups",
+                "--inexact",
+                external=True,
+            )
             sess.install(
                 package,
+                "--no-deps",
+                "--no-index",
                 "--find-links",
                 f"{self._directory}/dist/",
                 "--only-binary",
                 self._package,
-                "--no-deps",
             )
-            return install_group("main")(f)(sess)
+            return f(sess)
 
         return inner
 
@@ -192,12 +204,12 @@ class SessionManager:
     ) -> Callable[[Session], Any]:
         """Install the main package and its dependencies as resolved by pip.
 
-        Unlike _install_package, this method ignores the Poetry lock and relies
-        on pip to install whatever versions of dependencies it likes, simulating
+        Unlike _install_package, this method ignores the uv lock and relies on
+        pip to install whatever versions of dependencies it likes, simulating
         how the package might be installed on a user's machine. Also unlike
         _install_package, this method will only install from a built wheel in
-        dist/ -- locally, it will try to build a new wheel if it can't find one
-        -- and it will refuse to run with ``--no-venv``.
+        ``dist/``. Locally, it will try to build a new wheel if it can't find
+        one, and it will refuse to run with ``--no-venv``.
         """
 
         @wraps(f)
