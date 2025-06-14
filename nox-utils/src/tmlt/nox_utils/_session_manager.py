@@ -12,9 +12,10 @@ from typing import Any, Callable, Optional, Union
 import nox
 from nox import Session, session
 
-from ._dependencies import install_group, show_installed
+from ._dependencies import install_group, show_installed, with_uv_env
 from ._environment import in_ci, num_cpus
 
+nox.options.default_venv_backend = "uv"
 
 class SessionManager:
     """Class for creating common Nox sessions based on project-specific configuration.
@@ -73,7 +74,7 @@ class SessionManager:
         """
         self._package = package
         self._package_version = (
-            subprocess.run(["poetry", "version", "-s"], capture_output=True, check=True)
+            subprocess.run(["uv", "version", "--short"], capture_output=True, check=True)
             .stdout.decode("utf-8")
             .strip()
         )
@@ -126,12 +127,13 @@ class SessionManager:
             sess.log("Using custom build function")
             self._custom_build(sess)
         else:
-            sess.run("poetry", "build", external=True)
+            sess.run("uv", "build", external=True)
 
     def _current_wheel_available(self, sess: Session) -> bool:
         temp_dir = sess.create_tmp()
         package = f"{self._package}=={self._package_version}"
         out = sess.run(
+            "uv",
             "pip",
             "download",
             package,
@@ -153,6 +155,7 @@ class SessionManager:
         """Install the main package and its dependencies from Poetry lock."""
 
         @wraps(f)
+        @with_uv_env
         def inner(sess: Session) -> Any:
             if not sess.virtualenv.is_sandboxed:
                 sess.log(
@@ -164,7 +167,7 @@ class SessionManager:
             # it's easier to let Poetry handle figuring out what to install and
             # how to build it if needed.
             if not in_ci():
-                sess.run_install("poetry", "install", "--only", "main", external=True)
+                sess.run_install("uv", "sync", "--no-default-groups", "--inexact", external=True)
                 return f(sess)
 
             package = f"{self._package}=={self._package_version}"
@@ -175,6 +178,10 @@ class SessionManager:
                     "wheel must exist when running in CI"
                 )
 
+            sess.run_install(
+                "uv", "sync", "--no-install-project", "--no-default-groups", "--inexact",
+                external=True
+            )
             sess.install(
                 package,
                 "--find-links",
@@ -183,7 +190,7 @@ class SessionManager:
                 self._package,
                 "--no-deps",
             )
-            return install_group("main")(f)(sess)
+            return f(sess)
 
         return inner
 
