@@ -11,18 +11,9 @@ runs:
       shell: bash
     - run: python --version
       shell: bash
-    - run: curl -sSL https://install.python-poetry.org | python3 -
+    - run: curl -LsSf https://astral.sh/uv/install.sh | sh
       shell: bash
-    - run: poetry self lock
+    - run: uv --version
       shell: bash
-    - run: poetry self show
-      shell: bash
-    - run: poetry --version
-      shell: bash
-    - run: poetry install --only scripting
-      shell: bash
-    # Use same abbreviated SHA of first 7 characters across different CI jobs for the same commit.
-    # Without this there are random failures due to different abbreviations while installing apro package.
-    # https://github.com/mtkennerly/dunamai/issues/89
-    - run: git config core.abbrev 7
+    - run: uv sync --only-group scripting --no-install-project
       shell: bash

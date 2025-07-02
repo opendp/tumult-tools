@@ -3,13 +3,31 @@
 import os
 import platform
 import subprocess
+from pathlib import Path
 
+import uv_dynamic_versioning.main as uvdv
 from nox import Session
 
 
 def in_ci() -> bool:
     """Return whether nox is running in a CI pipeline."""
     return bool(os.environ.get("CI"))
+
+
+def package_version(directory: Path) -> str:
+    """Determine the package version for the package in the given directory."""
+    # This method is needed because uv does not currently support using the
+    # `uv version` command to determine the version number of a package that
+    # has a dynamically-computed version. To get around this, we're reaching
+    # into the uv_dynamic_versioning internals to compute the version number
+    # the way it does. This may be slightly fragile, as these functions may
+    # not be intended to be called directly.
+    uvdv_config = uvdv.validate(
+        uvdv.parse(
+            uvdv.read(directory),
+        )
+    ).tool.uv_dynamic_versioning
+    return uvdv.get_version(uvdv_config)[0]
 
 
 def num_cpus(sess: Session) -> int:
