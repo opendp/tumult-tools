@@ -4,6 +4,7 @@ This module defines SessionManager, which takes in a collection of configuration
 options and exposes methods that can be called to generate nox sessions.
 """
 
+import logging
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
@@ -38,6 +39,7 @@ class SessionManager:
     def __init__(
         self,
         package: str,
+        package_github: str,
         directory: Path,
         *,
         default_python_version: str = "3.9",
@@ -52,6 +54,8 @@ class SessionManager:
 
         Args:
             package: The name of the package, e.g. ``tmlt.core``.
+            package_github: The GitHub organization/project of the project,
+                e.g. "opendp/tumult-analytics".
             directory: The root directory of the package.
             default_python_version: The Python minor version that will be used by
                 default for most generated sessions. In general, this should be the
@@ -77,6 +81,7 @@ class SessionManager:
         """
         self._package = package
         self._package_version = package_version(directory)
+        self._package_github = package_github
         self._directory = directory
         self._default_python_version = default_python_version
         if custom_build is not None and not callable(custom_build):
@@ -89,6 +94,12 @@ class SessionManager:
         self._min_coverage = min_coverage
         self._audit_versions = audit_versions or [default_python_version]
         self._audit_suppressions = audit_suppressions or []
+
+        self._configure_logging()
+
+    def _configure_logging(self) -> None:
+        git_cmd_logger = logging.getLogger("git.cmd")
+        git_cmd_logger.setLevel(logging.INFO)
 
     @property
     def _test_dirs(self) -> list[Path]:
@@ -467,3 +478,20 @@ class SessionManager:
         # You can't use f-strings as ordinary docstrings, but by assigning
         # directly to __doc__ we can.
         benchmark.__doc__ = f"Run {name} benchmark."
+
+    def make_release(self) -> None:
+        # Importing GitPython, which is used by build_push_release, runs some
+        # subprocesses and emits logs that nox displays by default; don't import
+        # it until needed, and after we have reconfigured its logger.
+        from ._release import (  # pylint: disable=import-outside-toplevel
+            push_release_commits,
+        )
+
+        @session(name="make-release", python=None)
+        def make_release(sess: Session) -> None:
+            """Create and push a release tag from the current commit."""
+            if len(sess.posargs) != 1:
+                sess.error("Usage: nox -s make-release -- VERSION")
+            version = sess.posargs[0]
+
+            push_release_commits(sess, self._directory, self._package_github, version)

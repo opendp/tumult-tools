@@ -10,6 +10,7 @@ requires-python = ">=3.9,<4"
 dependencies = [
     "nox >=2022.8.7",
     "uv-dynamic-versioning >=0.8.2,<0.9",
+    "GitPython >=3.1.44,<4",
 ]
 
 [tool.uv]
