@@ -62,7 +62,9 @@ def install_group(
                 group,
                 "--no-install-project",
                 "--inexact",
+                f"--python={sess.virtualenv.location}",
                 external=True,
+                env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
             )
             return f(sess, *args, **kwargs)
 

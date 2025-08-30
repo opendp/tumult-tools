@@ -185,7 +185,13 @@ class SessionManager:
             # how to build it if needed.
             if not in_ci():
                 sess.run_install(
-                    "uv", "sync", "--no-default-groups", "--inexact", external=True
+                    "uv",
+                    "sync",
+                    "--no-default-groups",
+                    "--inexact",
+                    f"--python={sess.virtualenv.location}",
+                    external=True,
+                    env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
                 )
                 return f(sess, *args, **kwargs)
 
@@ -203,7 +209,9 @@ class SessionManager:
                 "--no-install-project",
                 "--no-default-groups",
                 "--inexact",
+                f"--python={sess.virtualenv.location}",
                 external=True,
+                env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
             )
             sess.install(
                 package,
