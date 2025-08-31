@@ -171,9 +171,6 @@ class SessionManager:
         @wraps(f)
         @with_uv_env
         def inner(sess: Session, *args, **kwargs) -> Any:
-            print("Install package")
-            print(args)
-            print(kwargs)
             if not sess.virtualenv.is_sandboxed:
                 sess.log(
                     "Not in a sandboxed environment, skipping package installation"

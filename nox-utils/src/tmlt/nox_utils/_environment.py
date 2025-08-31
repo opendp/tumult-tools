@@ -65,9 +65,6 @@ def with_clean_workdir(f):
 
     @wraps(f)
     def inner(*args, **kwargs):
-        print("with_clean_workdir")
-        print(args)
-        print(kwargs)
         session = get_session(args)
         if session.virtualenv.is_sandboxed:
             with tempfile.TemporaryDirectory() as workdir, session.cd(workdir):
