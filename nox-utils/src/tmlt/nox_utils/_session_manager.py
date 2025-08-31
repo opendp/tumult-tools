@@ -18,7 +18,7 @@ from ._dependencies import (
     show_installed,
     with_uv_env,
 )
-from ._environment import in_ci, num_cpus, package_version, with_clean_workdir
+from ._environment import in_ci, num_cpus, package_version
 
 # Use uv for managing virtualenvs. This significantly reduces the overhead
 # associated with using nox sessions in their own virtualenvs versus running
@@ -523,7 +523,6 @@ class SessionManager:
         @session(tags=["test_dependency_matrix"])
         @install_group("test")
         @self._install_package
-        @with_clean_workdir
         @nox.parametrize("python,packages", zip(pythons, packages), ids=ids)
         def test_dependency_matrix(sess: Session, packages):
             """Run tests using various dependencies."""
