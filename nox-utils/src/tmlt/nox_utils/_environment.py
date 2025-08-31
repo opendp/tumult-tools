@@ -10,8 +10,6 @@ from pathlib import Path
 import uv_dynamic_versioning.main as uvdv
 from nox import Session
 
-from .utils import get_session
-
 
 def in_ci() -> bool:
     """Return whether nox is running in a CI pipeline."""
@@ -64,12 +62,11 @@ def with_clean_workdir(f):
     """
 
     @wraps(f)
-    def inner(*args, **kwargs):
-        session = get_session(args)
+    def inner(session: Session, *args, **kwargs):
         if session.virtualenv.is_sandboxed:
             with tempfile.TemporaryDirectory() as workdir, session.cd(workdir):
-                return f(*args, **kwargs)
+                return f(session, *args, **kwargs)
         else:
-            return f(*args, **kwargs)
+            return f(session, *args, **kwargs)
 
     return inner
