@@ -7,12 +7,17 @@ options and exposes methods that can be called to generate nox sessions.
 import logging
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 import nox
 from nox import Session, session
 
-from ._dependencies import install_group, show_installed, with_uv_env
+from ._dependencies import (
+    DependencyConfiguration,
+    install_group,
+    show_installed,
+    with_uv_env,
+)
 from ._environment import in_ci, num_cpus, package_version
 
 # Use uv for managing virtualenvs. This significantly reduces the overhead
@@ -165,21 +170,27 @@ class SessionManager:
 
         @wraps(f)
         @with_uv_env
-        def inner(sess: Session) -> Any:
+        def inner(sess: Session, *args, **kwargs) -> Any:
             if not sess.virtualenv.is_sandboxed:
                 sess.log(
                     "Not in a sandboxed environment, skipping package installation"
                 )
-                return f(sess)
+                return f(sess, *args, **kwargs)
 
             # In the CI we want to use the wheel from the pipeline, but locally
             # it's easier to let uv handle figuring out what to install and
             # how to build it if needed.
             if not in_ci():
                 sess.run_install(
-                    "uv", "sync", "--no-default-groups", "--inexact", external=True
+                    "uv",
+                    "sync",
+                    "--no-default-groups",
+                    "--inexact",
+                    f"--python={sess.virtualenv.location}",
+                    external=True,
+                    env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
                 )
-                return f(sess)
+                return f(sess, *args, **kwargs)
 
             package = f"{self._package}=={self._package_version}"
 
@@ -195,7 +206,9 @@ class SessionManager:
                 "--no-install-project",
                 "--no-default-groups",
                 "--inexact",
+                f"--python={sess.virtualenv.location}",
                 external=True,
+                env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
             )
             sess.install(
                 package,
@@ -206,7 +219,7 @@ class SessionManager:
                 "--only-binary",
                 self._package,
             )
-            return f(sess)
+            return f(sess, *args, **kwargs)
 
         return inner
 
@@ -495,3 +508,25 @@ class SessionManager:
             version = sess.posargs[0]
 
             push_release_commits(sess, self._directory, self._package_github, version)
+
+    def test_dependency_matrix(self, dependency_matrix: List[DependencyConfiguration]):
+        """Generate the test_dependency_matrix parameterized Nox session.
+
+        The `dependency_matrix`  should contain a set of DependencyConfiguration
+        objects which specify the name, python version, and other pinned
+        packages to be used in the test.
+        """
+        ids = [config.id for config in dependency_matrix]
+        pythons = [config.python for config in dependency_matrix]
+        packages = [config.packages for config in dependency_matrix]
+
+        @session(tags=["test_dependency_matrix"])
+        @install_group("test")
+        @self._install_package
+        @nox.parametrize("python,packages", zip(pythons, packages), ids=ids)
+        def test_dependency_matrix(sess: Session, packages):
+            """Run tests using various dependencies."""
+            sess.install(*[pkg + version for pkg, version in packages.items()])
+            sess.run("uv", "pip", "freeze")
+
+            self._test(sess, "not slow")
