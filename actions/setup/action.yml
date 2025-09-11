@@ -1,5 +1,10 @@
 name: 'Setup'
 description: 'Initialize a github actions runner for CI jobs.'
+inputs:
+  java-version:
+    description: "The java version to install."
+    required: true
+    default: "8"
 runs:
   using: "composite"
   steps:
@@ -7,6 +12,11 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
+    - name: setup java
+      uses: actions/setup-java@v5
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: "corretto"
     - run: java -version
       shell: bash
     - run: python --version
