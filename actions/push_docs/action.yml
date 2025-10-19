@@ -34,7 +34,7 @@ runs:
         repository: ${{ inputs.docs-repository }}
         token: ${{ inputs.docs-repository-token }}
         path: docs-repo
-    - run: rm -r docs-repo/${{ inputs.docs-path }}/${{ inputs.version }}
+    - run: rm -rf docs-repo/${{ inputs.docs-path }}/${{ inputs.version }}
       shell: bash
     - run: mv public docs-repo/${{ inputs.docs-path }}/${{ inputs.version }}
       shell: bash
