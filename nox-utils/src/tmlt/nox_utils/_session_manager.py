@@ -270,6 +270,22 @@ class SessionManager:
             """Build source distributions and wheels for this package."""
             self._build(sess)
 
+    def ruff_format(self) -> None:
+        @session(name="ruff-format", tags=["lint"], python=self._default_python_version)
+        @install_group("ruff")
+        def ruff_format(sess: Session) -> None:
+            """Run ruff format."""
+            check_flags = ["--check", "--diff"] if "--check" in sess.posargs else []
+            sess.run("ruff", "format", *check_flags, *self._code_dirs)
+
+    def ruff_check(self) -> None:
+        @session(name="ruff-check", tags=["lint"], python=self._default_python_version)
+        @install_group("ruff")
+        def ruff_check(sess: Session) -> None:
+            """Run ruff check."""
+            check_flags = [] if "--check" in sess.posargs else ["--fix"]
+            sess.run("ruff", "check", *check_flags, *self._code_dirs)
+
     def black(self) -> None:
         @session(name="black", tags=["lint"], python=self._default_python_version)
         @install_group("black")
