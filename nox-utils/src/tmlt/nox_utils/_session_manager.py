@@ -170,7 +170,7 @@ class SessionManager:
 
         @wraps(f)
         @with_uv_env
-        def inner(sess: Session, *args, **kwargs) -> Any:
+        def inner(sess: Session, *args: Any, **kwargs: Any) -> Any:
             if not sess.virtualenv.is_sandboxed:
                 sess.log(
                     "Not in a sandboxed environment, skipping package installation"
@@ -376,7 +376,7 @@ class SessionManager:
         ]
         cpus = num_cpus(sess)
         if self._parallel_tests and cpus > 3:
-            args.append(f"--numprocesses={cpus//2}")
+            args.append(f"--numprocesses={cpus // 2}")
         if markers:
             args.extend(["-m", markers])
 
@@ -512,9 +512,7 @@ class SessionManager:
         # Importing GitPython, which is used by build_push_release, runs some
         # subprocesses and emits logs that nox displays by default; don't import
         # it until needed, and after we have reconfigured its logger.
-        from ._release import (  # pylint: disable=import-outside-toplevel
-            push_release_commits,
-        )
+        from ._release import push_release_commits  # noqa: PLC0415
 
         @session(name="make-release", python=None)
         def make_release(sess: Session) -> None:
@@ -525,7 +523,9 @@ class SessionManager:
 
             push_release_commits(sess, self._directory, self._package_github, version)
 
-    def test_dependency_matrix(self, dependency_matrix: List[DependencyConfiguration]):
+    def test_dependency_matrix(
+        self, dependency_matrix: List[DependencyConfiguration]
+    ) -> None:
         """Generate the test_dependency_matrix parameterized Nox session.
 
         The `dependency_matrix`  should contain a set of DependencyConfiguration
@@ -540,7 +540,7 @@ class SessionManager:
         @install_group("test")
         @self._install_package
         @nox.parametrize("python,packages", zip(pythons, packages), ids=ids)
-        def test_dependency_matrix(sess: Session, packages):
+        def test_dependency_matrix(sess: Session, packages: dict[str, str]) -> None:
             """Run tests using various dependencies."""
             sess.install(*[pkg + version for pkg, version in packages.items()])
             sess.run("uv", "pip", "freeze")

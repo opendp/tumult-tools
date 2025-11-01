@@ -28,7 +28,7 @@ def with_uv_env(f: Callable[[Session], Any]) -> Callable[[Session], Any]:
     """Configure given session to allow managing packages with uv."""
 
     @wraps(f)
-    def inner(sess: Session, *args, **kwargs) -> Any:
+    def inner(sess: Session, *args: Any, **kwargs: Any) -> Any:
         if sess.virtualenv.is_sandboxed:
             sess.env["UV_PROJECT_ENVIRONMENT"] = sess.virtualenv.location
         return f(sess, *args, **kwargs)
@@ -48,7 +48,7 @@ def install_group(
     def decorator(f: Callable[[Session], Any]) -> Callable[[Session], Any]:
         @wraps(f)
         @with_uv_env
-        def inner(sess: Session, *args, **kwargs) -> Any:
+        def inner(sess: Session, *args: Any, **kwargs: Any) -> Any:
             if not sess.virtualenv.is_sandboxed:
                 sess.log(
                     "Not in a sandboxed environment, skipping package installation"
