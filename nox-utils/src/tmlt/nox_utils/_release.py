@@ -140,7 +140,7 @@ def _update_changelog_unreleased(version: str) -> None:
                 .. _v{version}:
 
                 {version_header_title}
-                {'-' * len(version_header_title)}
+                {"-" * len(version_header_title)}
                 """
             )
 
@@ -174,7 +174,7 @@ def _add_changelog_unreleased() -> None:
             # If there's already an unreleased header, something has gone wrong.
             if line_content == unreleased_header[0]:
                 raise RuntimeError(
-                    f"Changelog already contains an unreleased section on line {i+1}"
+                    f"Changelog already contains an unreleased section on line {i + 1}"
                 )
             if re.match(anchor_regex, line_content):
                 for new_line in reversed(unreleased_header):
@@ -186,5 +186,5 @@ def _add_changelog_unreleased() -> None:
                 "unable to find release section to place it before"
             )
 
-        with Path("CHANGELOG.rst").open("w", encoding="utf-8") as fp:
-            fp.writelines(changelog_content)
+    with Path("CHANGELOG.rst").open("w", encoding="utf-8") as fp:
+        fp.writelines(changelog_content)

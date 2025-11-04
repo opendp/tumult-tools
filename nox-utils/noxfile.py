@@ -11,8 +11,6 @@ CWD = Path(".").resolve()
 sm = SessionManager(
     PACKAGE_NAME, PACKAGE_GITHUB, CWD
 )
-sm.black()
-sm.isort()
+sm.ruff_format()
+sm.ruff_check()
 sm.mypy()
-sm.pylint()
-sm.pydocstyle()
