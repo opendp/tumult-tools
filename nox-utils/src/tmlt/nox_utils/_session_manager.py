@@ -377,7 +377,7 @@ class SessionManager:
         cpus = num_cpus(sess)
         if self._parallel_tests and cpus > 3:
             args.append(f"--numprocesses={cpus // 2}")
-        if markers:
+        if markers and "-m" not in extra_args:
             args.extend(["-m", markers])
 
         sess.run("pytest", *args)
