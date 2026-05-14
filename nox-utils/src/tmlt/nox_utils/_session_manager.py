@@ -357,6 +357,7 @@ class SessionManager:
         extra_args = extra_args or []
         if sess.posargs:
             test_paths = []
+            min_coverage = 0
             extra_args.extend(sess.posargs)
         args: list[Union[str, Path]] = [
             "-r fEs",
