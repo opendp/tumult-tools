@@ -8,9 +8,8 @@ PACKAGE_GITHUB = "opendp/tumult-tools"
 """GitHub organization/project."""
 CWD = Path(".").resolve()
 
-sm = SessionManager(
-    PACKAGE_NAME, PACKAGE_GITHUB, CWD
-)
+sm = SessionManager(PACKAGE_NAME, PACKAGE_GITHUB, CWD)
 sm.ruff_format()
 sm.ruff_check()
 sm.mypy()
+sm.benchmark(Path("test") / "test_extras_benchmark.py", 100, extras=["pytest-extra"])

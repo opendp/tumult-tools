@@ -165,63 +165,73 @@ class SessionManager:
         assert out is not None, "sess.run should not return None when silent=True"
         return "No solution found when resolving dependencies" not in out
 
-    def _install_package(self, f: Callable[[Session], Any]) -> Callable[[Session], Any]:
+    def _install_package(
+        self, extras: Optional[List[str]] = None
+    ) -> Callable[[Callable[[Session], Any]], Callable[[Session], Any]]:
         """Install the main package and its dependencies from uv lock."""
+        if not extras:
+            extras = []
 
-        @wraps(f)
-        @with_uv_env
-        def inner(sess: Session, *args: Any, **kwargs: Any) -> Any:
-            if not sess.virtualenv.is_sandboxed:
-                sess.log(
-                    "Not in a sandboxed environment, skipping package installation"
-                )
-                return f(sess, *args, **kwargs)
+        def decorator(f: Callable[[Session], Any]) -> Callable[[Session], Any]:
+            @wraps(f)
+            @with_uv_env
+            def inner(sess: Session, *args: Any, **kwargs: Any) -> Any:
+                if not sess.virtualenv.is_sandboxed:
+                    sess.log(
+                        "Not in a sandboxed environment, skipping package installation"
+                    )
+                    return f(sess, *args, **kwargs)
 
-            # In the CI we want to use the wheel from the pipeline, but locally
-            # it's easier to let uv handle figuring out what to install and
-            # how to build it if needed.
-            if not in_ci():
+                # In the CI we want to use the wheel from the pipeline, but locally
+                # it's easier to let uv handle figuring out what to install and
+                # how to build it if needed.
+                if not in_ci():
+                    extras_args = [f"--extra={extra}" for extra in extras]
+                    sess.run_install(
+                        "uv",
+                        "sync",
+                        "--no-default-groups",
+                        "--inexact",
+                        f"--python={sess.virtualenv.location}",
+                        *extras_args,
+                        external=True,
+                        env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
+                    )
+                    return f(sess, *args, **kwargs)
+
+                extras_string = f"[{', '.join(extras)}]" if extras else ""
+                package = f"{self._package}{extras_string}=={self._package_version}"
+
+                if not self._current_wheel_available(sess):
+                    sess.error(
+                        f"No wheel found for '{package}'; "
+                        "wheel must exist when running in CI"
+                    )
+
                 sess.run_install(
                     "uv",
                     "sync",
+                    "--no-install-project",
                     "--no-default-groups",
                     "--inexact",
                     f"--python={sess.virtualenv.location}",
                     external=True,
                     env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
                 )
+                sess.install(
+                    package,
+                    "--no-deps",
+                    "--no-index",
+                    "--find-links",
+                    f"{self._directory}/dist/",
+                    "--only-binary",
+                    self._package,
+                )
                 return f(sess, *args, **kwargs)
 
-            package = f"{self._package}=={self._package_version}"
+            return inner
 
-            if not self._current_wheel_available(sess):
-                sess.error(
-                    f"No wheel found for '{package}'; "
-                    "wheel must exist when running in CI"
-                )
-
-            sess.run_install(
-                "uv",
-                "sync",
-                "--no-install-project",
-                "--no-default-groups",
-                "--inexact",
-                f"--python={sess.virtualenv.location}",
-                external=True,
-                env={"UV_PROJECT_ENVIRONMENT": sess.virtualenv.location},
-            )
-            sess.install(
-                package,
-                "--no-deps",
-                "--no-index",
-                "--find-links",
-                f"{self._directory}/dist/",
-                "--only-binary",
-                self._package,
-            )
-            return f(sess, *args, **kwargs)
-
-        return inner
+        return decorator
 
     def _install_package_with_unlocked_deps(
         self, f: Callable[[Session], Any]
@@ -302,17 +312,17 @@ class SessionManager:
             check_flags = ["--check", "--diff"] if "--check" in sess.posargs else []
             sess.run("isort", *check_flags, *self._code_dirs)
 
-    def mypy(self) -> None:
+    def mypy(self, extras: Optional[List[str]] = None) -> None:
         @session(name="mypy", tags=["lint"], python=self._default_python_version)
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("mypy")
         def mypy(sess: Session) -> None:
             """Run mypy."""
             sess.run("mypy", *self._code_dirs)
 
-    def pylint(self) -> None:
+    def pylint(self, extras: Optional[List[str]] = None) -> None:
         @session(name="pylint", tags=["lint"], python=self._default_python_version)
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("pylint")
         def pylint(sess: Session) -> None:
             """Run pylint."""
@@ -325,9 +335,9 @@ class SessionManager:
             """Run pydocstyle."""
             sess.run("pydocstyle", *self._code_dirs)
 
-    def smoketest(self) -> None:
+    def smoketest(self, extras: Optional[List[str]] = None) -> None:
         @session(name="smoketest", tags=["test"], python=self._default_python_version)
-        @self._install_package
+        @self._install_package(extras=extras)
         def smoketest(sess: Session) -> None:
             """Run a simple smoke-test of the package."""
             sess.run("python", "-c", self._smoketest_script)
@@ -382,35 +392,35 @@ class SessionManager:
 
         sess.run("pytest", *args)
 
-    def test(self) -> None:
+    def test(self, extras: Optional[List[str]] = None) -> None:
         @session(name="test", python=self._default_python_version)
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("test")
         def test(sess: Session) -> None:
             """Run all tests."""
             self._test(sess)
 
-    def test_fast(self) -> None:
+    def test_fast(self, extras: Optional[List[str]] = None) -> None:
         @session(name="test-fast", python=self._default_python_version)
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("test")
         def test_fast(sess: Session) -> None:
             """Run fast tests."""
             self._test(sess, "not slow")
 
-    def test_slow(self) -> None:
+    def test_slow(self, extras: Optional[List[str]] = None) -> None:
         @session(name="test-slow", python=self._default_python_version)
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("test")
         def test_slow(sess: Session) -> None:
             """Run slow tests."""
             self._test(sess, "slow", min_coverage=0)
 
-    def test_doctest(self) -> None:
+    def test_doctest(self, extras: Optional[List[str]] = None) -> None:
         @session(
             name="test-doctest", tags=["test"], python=self._default_python_version
         )
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("test")
         def test_doctest(sess: Session) -> None:
             """Run tests on code examples in docstrings."""
@@ -425,36 +435,36 @@ class SessionManager:
         sphinx_options = ["-n", "-W", "--keep-going"]
         sess.run("sphinx-build", "doc/", "public/", f"-b={builder}", *sphinx_options)
 
-    def docs_linkcheck(self) -> None:
+    def docs_linkcheck(self, extras: Optional[List[str]] = None) -> None:
         @session(
             name="docs-linkcheck", tags=["docs"], python=self._default_python_version
         )
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("docs")
         def docs_linkcheck(sess: Session) -> None:
             """Check links in documentation."""
             self._run_sphinx(sess, "linkcheck")
 
-    def docs_doctest(self) -> None:
+    def docs_doctest(self, extras: Optional[List[str]] = None) -> None:
         @session(
             name="docs-doctest", tags=["docs"], python=self._default_python_version
         )
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("docs")
         @install_group("docs-examples")
         def docs_linkcheck(sess: Session) -> None:
             """Check code examples in documentation."""
             self._run_sphinx(sess, "doctest")
 
-    def docs(self) -> None:
+    def docs(self, extras: Optional[List[str]] = None) -> None:
         @session(name="docs", tags=["docs"], python=self._default_python_version)
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("docs")
         def docs(sess: Session) -> None:
             """Build HTML documentation."""
             self._run_sphinx(sess, "html")
 
-    def audit(self) -> None:
+    def audit(self, extras: Optional[List[str]] = None) -> None:
         """Generate the audit parameterized Nox session.
 
         To be useful, this function needs the `audit_versions` option to be
@@ -466,7 +476,7 @@ class SessionManager:
         ]
 
         @session(name="audit")
-        @self._install_package
+        @self._install_package(extras=extras)
         @install_group("audit")
         @show_installed
         @nox.parametrize("python", self._audit_versions)
@@ -474,7 +484,9 @@ class SessionManager:
             """Check for vulnerable dependencies."""
             sess.run("pip-audit", "-v", "--progress-spinner", "off", *ignore_options)
 
-    def benchmark(self, script: Path, timeout: int) -> None:
+    def benchmark(
+        self, script: Path, timeout: int, extras: Optional[List[str]] = None
+    ) -> None:
         """Generate a Nox session running the given benchmark.
 
         The stem of the script file name will be used as the benchmark name, so
@@ -485,11 +497,13 @@ class SessionManager:
             script: The path to the benchmark script.
             timeout: The time before the benchmark will be considered failed and
                 killed, in seconds.
+            extras: The session will attempt to install the main package with these
+                extras, if specified.
         """
         name = script.stem.replace("_", "-")
 
         @session(name=f"benchmark-{name}", tags=["benchmark"])
-        @self._install_package
+        @self._install_package(extras=extras)
         def benchmark(sess: Session) -> None:
             (self._directory / "benchmark_output").mkdir(exist_ok=True)
             sess.log("Exit code 124 indicates a timeout, others are script errors")
@@ -524,7 +538,9 @@ class SessionManager:
             push_release_commits(sess, self._directory, self._package_github, version)
 
     def test_dependency_matrix(
-        self, dependency_matrix: List[DependencyConfiguration]
+        self,
+        dependency_matrix: List[DependencyConfiguration],
+        extras: Optional[List[str]] = None,
     ) -> None:
         """Generate the test_dependency_matrix parameterized Nox session.
 
@@ -538,7 +554,7 @@ class SessionManager:
 
         @session(tags=["test_dependency_matrix"])
         @install_group("test")
-        @self._install_package
+        @self._install_package(extras=extras)
         @nox.parametrize("python,packages", zip(pythons, packages), ids=ids)
         def test_dependency_matrix(sess: Session, packages: dict[str, str]) -> None:
             """Run tests using various dependencies."""
